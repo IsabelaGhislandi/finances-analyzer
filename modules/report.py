@@ -17,7 +17,7 @@ class ReportGenerator(ABC):
 
         pass
 
-class ReportGenerator(ReportGenerator):
+class SimpleReportGenerator(ReportGenerator):
     #Gerador de relatórios simples e unificado
     
     def __init__(self, output_dir: str = 'outputs'):
@@ -364,6 +364,6 @@ class ReportFactory:
     @staticmethod
     def create_generator(report_type: str = 'simple', **kwargs) -> ReportGenerator:
         if report_type.lower() == 'simple':
-            return ReportGenerator(**kwargs)
+            return SimpleReportGenerator(**kwargs)
         else:
             raise ValueError(f"Tipo de relatório não suportado: {report_type}")
