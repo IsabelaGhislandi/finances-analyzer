@@ -1,255 +1,369 @@
-#Módulo para geração de relatórios e visualizações
-from abc import ABC, abstractmethod
+# modules/reports.py
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
 import numpy as np
-import seaborn as sns
+from typing import Dict, List, Optional
+from abc import ABC, abstractmethod
 import logging
-from typing import Dict
 import os
 
 logger = logging.getLogger(__name__)
 
-# Configurar estilo dos gráficos
-plt.style.use('default')
-sns.set_palette("husl")
-
-class ReportInterface(ABC):
-    #Classe para gerar relatórios e gráficos
-
+class ReportGenerator(ABC):
+    #Interface base para geradores de relatórios
     @abstractmethod
-    def generate_report(self, data_dict: Dict[str, pd.DataFrame]) -> None:
-        #Gera o relatório
+    def generate_report(self, data: Dict, **kwargs) -> bool:
+
         pass
+
+class ReportGenerator(ReportGenerator):
+    #Gerador de relatórios simples e unificado
     
-    @abstractmethod
-    def get_report_name(self) -> str:
-        #Retorna o nome do tipo de relatório
-        pass
-
-class StockReport(ReportInterface):
-    def __init__(self, output_dir: str = "outputs/plots", 
-                 include_advanced_analysis: bool = True,
-                 include_summary_stats: bool = True,
-                 figsize: tuple = (12, 8)):
+    def __init__(self, output_dir: str = 'outputs'):
         self.output_dir = output_dir
+        self.setup_style()
         os.makedirs(output_dir, exist_ok=True)
-        self.figsize = figsize
-        self.colors = ['#2E86C1', '#28B463', '#F39C12', '#E74C3C', '#8E44AD']
-        
-        # Configurações flexíveis
-        self.include_advanced_analysis = include_advanced_analysis
-        self.include_summary_stats = include_summary_stats
-
-    def get_report_name(self) -> str:
-        if self.include_advanced_analysis and self.include_summary_stats:
-            return "Default Report"
-        else:
-            return "Custom Report"
-
-    def generate_report(self, data_dict: Dict[str, pd.DataFrame]) -> None:
-        logger.info(f"Gerando {self.get_report_name()}")
-        # Análises básicas (sempre incluídas)
-        self.plot_comparison(data_dict)
-        self.plot_correlation_heatmap(data_dict)
-        
-        # Análises condicionais baseadas nas configurações
-        if self.include_summary_stats:
-            self.generate_summary_stats(data_dict)
-        
-        if self.include_advanced_analysis:
-            self.plot_rolling_volatility(data_dict)
-            self.plot_drawdown_analysis(data_dict)
-            self.plot_risk_return_scatter(data_dict)
+        logger.info(f"SimpleReportGenerator inicializado - output: {output_dir}")
     
-    def plot_single_stock(self, data: pd.DataFrame, ticker: str, save: bool = True) -> None:
-        #Gráfico de preço de uma ação individual
-        #Gráfico de preço de uma ação individual
-        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=self.figsize, 
-                                       gridspec_kw={'height_ratios': [3, 1]})
+    def setup_style(self):
+        #Configura estilo padrão dos gráficos
+        plt.style.use('seaborn-v0_8')
+        sns.set_palette("husl")
         
-        # Gráfico principal - Preço
-        ax1.plot(data.index, data['Close'], linewidth=2, color=self.colors[0])
-        ax1.set_title(f'{ticker} - Evolução do Preço Ajustado', fontsize=16, fontweight='bold')
-        ax1.set_ylabel('Preço (R$)', fontsize=12)
-        ax1.grid(True, alpha=0.3)
-        ax1.tick_params(axis='x', labelbottom=False)
-        
-        # Adicionar informações básicas
-        price_start = data['Close'].iloc[0]
-        price_end = data['Close'].iloc[-1]
-        total_return = (price_end / price_start - 1) * 100
-        
-        ax1.text(0.02, 0.95, f'Retorno Total: {total_return:.1f}%', 
-                transform=ax1.transAxes, fontsize=11,
-                bbox=dict(boxstyle="round,pad=0.3", facecolor="white", alpha=0.8))
-        
-        # Gráfico secundário - Volume
-        ax2.bar(data.index, data['Volume'], alpha=0.6, color=self.colors[1])
-        ax2.set_ylabel('Volume', fontsize=12)
-        ax2.set_xlabel('Data', fontsize=12)
-        ax2.tick_params(axis='x', rotation=45)
-      
-        fig.tight_layout()
-        
-        if save:
-            filename = os.path.join(self.output_dir, f'{ticker}_analysis.png')
-            plt.savefig(filename, dpi=300, bbox_inches='tight')
-            logger.info(f"Gráfico salvo: {filename}")
-        
-        fig.show()
+        # Configurações para melhor qualidade
+        plt.rcParams['figure.dpi'] = 100
+        plt.rcParams['savefig.dpi'] = 300
+        plt.rcParams['font.size'] = 10
+        plt.rcParams['axes.titlesize'] = 12
+        plt.rcParams['axes.labelsize'] = 10
+        plt.rcParams['xtick.labelsize'] = 9
+        plt.rcParams['ytick.labelsize'] = 9
+        plt.rcParams['legend.fontsize'] = 10
     
-    def plot_comparison(self, data_dict: Dict[str, pd.DataFrame], 
-                       normalize: bool = True, save: bool = True) -> None:
-        #Compara múltiplas ações em um gráfico
-
-        fig, ax = plt.subplots(figsize=self.figsize)
+    def generate_report(self, data: Dict, **kwargs) -> bool:
+        #Gera relatório baseado no tipo de dados"""
+        report_type = kwargs.get('report_type', 'auto')
         
-        returns_data = {}
-        
-        for i, (ticker, data) in enumerate(data_dict.items()):
-            if normalize:
-                # Normalizar para base 100
-                normalized_price = (data['Close'] / data['Close'].iloc[0]) * 100
-                ax.plot(data.index, normalized_price, 
-                       label=ticker, linewidth=2.5, color=self.colors[i % len(self.colors)])
-                
-                # Calcular retorno para a tabela
-                final_return = (normalized_price.iloc[-1] / 100 - 1) * 100
-                returns_data[ticker] = {
-                    'Retorno (%)': final_return,
-                    'Preço Inicial (R$)': data['Close'].iloc[0],
-                    'Preço Final (R$)': data['Close'].iloc[-1]
-                }
-            else:
-                ax.plot(data.index, data['Close'], 
-                       label=ticker, linewidth=2.5, color=self.colors[i % len(self.colors)])
-        
-        # Configurar gráfico
-        title = 'Comparação de Performance (Base 100)' if normalize else 'Comparação de Preços'
-        ylabel = 'Performance Normalizada' if normalize else 'Preço (R$)'
-        
-        ax.set_title(title, fontsize=16, fontweight='bold')
-        ax.set_xlabel('Data', fontsize=12)
-        ax.set_ylabel(ylabel, fontsize=12)
-        ax.legend(loc='best')
-        ax.grid(True, alpha=0.3)
-        
-        # Rotacionar labels do eixo x
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        
-        if save:
-            filename = os.path.join(self.output_dir, 'comparison_plot.png')
-            plt.savefig(filename, dpi=300, bbox_inches='tight')
-            logger.info(f"Gráfico salvo: {filename}")
-        
-        plt.show()
-        
-        # Mostrar tabela de retornos se normalizado
-        if normalize and returns_data:
-            self._print_returns_table(returns_data)
-    
-    def plot_correlation_heatmap(self, data_dict: Dict[str, pd.DataFrame], 
-                                save: bool = True) -> None:
         try:
-        # Usa função de correlação robusta
-            from modules.data import calculate_correlation_matrix
-            corr_matrix = calculate_correlation_matrix(data_dict)
+            if report_type == 'phase1' or 'stock_data' in data:
+                self._generate_phase1_report(data, **kwargs)
+            elif report_type == 'phase2' or 'comparacao' in data:
+                self._generate_phase2_report(data, **kwargs)
+            else:
+                self._generate_generic_report(data, **kwargs)
             
-            if corr_matrix is None:
-                logger.warning("Não foi possível calcular correlação - dados insuficientes")
-                return
-            
-            # Plotar heatmap
-            plt.figure(figsize=(10, 8))
-            sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, 
-                    square=True, linewidths=0.5)
-            plt.title('Matriz de Correlação entre Ativos')
-            plt.tight_layout()
-            
-            if save:
-                plt.savefig('plots/correlation_heatmap.png', dpi=300, bbox_inches='tight')
-                logger.info("Heatmap de correlação salvo")
-            
-            plt.show()
+            logger.info("Relatório gerado com sucesso")
+            return True
             
         except Exception as e:
-            logger.error(f"Erro ao plotar correlação: {e}")
+            logger.error(f"Erro ao gerar relatório: {e}")
+            return False
     
-    def _print_returns_table(self, returns_data: Dict) -> None:
-        #Imprime tabela formatada de retornos
+    def _generate_phase1_report(self, data: Dict, **kwargs):
+        #Gera relatório da Fase 1: Análise exploratória
         
-        df = pd.DataFrame.from_dict(returns_data, orient='index')
-        df = df.sort_values('Retorno (%)', ascending=False)
+        # Gráfico de preços das ações
+        if 'stock_data' in data:
+            self._plot_stock_prices(data['stock_data'], **kwargs)
         
-        print("\n" + "="*60)
-        print("📊 RANKING DE PERFORMANCE")
-        print("="*60)
-        print(df.round(2))
-        print("="*60)
+        # Gráfico de correlação
+        if 'stock_data' in data and len(data['stock_data']) > 1:
+            self._plot_correlation_heatmap(data['stock_data'], **kwargs)
+        
+        #  Gráfico de retornos
+        if 'stock_data' in data:
+            self._plot_returns(data['stock_data'], **kwargs)
     
-    def generate_summary_stats(self, data_dict: Dict[str, pd.DataFrame]) -> pd.DataFrame:
-        #Gera estatísticas resumidas para cada ação
-  
-        stats = {}
+    def _generate_phase2_report(self, data: Dict, **kwargs):
+        #Gera relatório da Fase 2: Simulação de investimentos"""
+        print(f"🔍 DEBUG: Gerando relatório Fase 2 com dados: {list(data.keys())}")
         
-        for ticker, data in data_dict.items():
-            price_start = data['Close'].iloc[0]
-            price_end = data['Close'].iloc[-1]
-            
-            # Calcular retornos diários
-            daily_returns = data['Close'].pct_change().dropna()
-            
-            stats[ticker] = {
-                'Preço Inicial (R$)': price_start,
-                'Preço Final (R$)': price_end,
-                'Retorno Total (%)': (price_end / price_start - 1) * 100,
-                'Volatilidade Diária (%)': daily_returns.std() * 100,
-                'Volatilidade Anual (%)': daily_returns.std() * np.sqrt(252) * 100,
-                'Maior Alta (%)': daily_returns.max() * 100,
-                'Maior Baixa (%)': daily_returns.min() * 100,
-                'Dias de Dados': len(data)
-            }
+        # 1. Gráfico comparativo dos cenários
+        if 'comparacao' in data:
+            print(f"✅ Gerando gráfico comparativo...")
+            self._plot_scenario_comparison(data['comparacao'], **kwargs)
+        else:
+            print(f"❌ Dados de comparação não encontrados")
         
-        df_stats = pd.DataFrame.from_dict(stats, orient='index')
+        # 2. Gráfico de evolução do capital
+        if 'juros_fixos' in data and 'carteira_acoes' in data:
+            print(f"✅ Gerando gráfico de evolução do capital...")
+            self._plot_capital_evolution(data, **kwargs)
+        else:
+            print(f"❌ Dados de evolução não encontrados: juros_fixos={('juros_fixos' in data)}, carteira_acoes={('carteira_acoes' in data)}")
         
-        print("\n" + "="*80)
-        print("📈 ESTATÍSTICAS RESUMIDAS")
-        print("="*80)
-        print(df_stats.round(2))
-        print("="*80)
+        # 3. Gráfico de métricas comparativas
+        if 'metricas_juros' in data and 'metricas_carteira' in data:
+            print(f"✅ Gerando gráfico de métricas...")
+            self._plot_metrics_comparison(data, **kwargs)
+        else:
+            print(f"❌ Dados de métricas não encontrados: metricas_juros={('metricas_juros' in data)}, metricas_carteira={('metricas_carteira' in data)}")
+
+    def _plot_stock_prices(self, stock_data: Dict, **kwargs):
+        #Plota preços das ações
+        fig, ax = plt.subplots(figsize=(12, 6))
         
-        return df_stats
+        valid_data_count = 0
+        for ticker, data in stock_data.items():
+            if 'Close' in data.columns:
+                ax.plot(data.index, data['Close'], label=ticker, linewidth=2)
+                valid_data_count += 1
+                print(f"✅ Plotando {ticker} usando preços de fechamento")
+            else:
+                print(f"❌ Coluna 'Close' não encontrada para {ticker}")
+        
+        if valid_data_count == 0:
+            print("⚠️ Nenhum dado válido encontrado para plotar preços")
+            plt.close(fig)
+            return
+        
+        ax.set_title('Evolução dos Preços das Ações', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Data')
+        ax.set_ylabel('Preço (R$)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Corrigir rotação e layout
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/precos_acoes.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico de preços salvo: {filename}")
+    
+    def _plot_correlation_heatmap(self, stock_data: Dict, **kwargs):
+        #Plota mapa de correlação
+        if len(stock_data) < 2:
+            return
+        
+        # Calcular correlações
+        returns_data = {}
+        for ticker, data in stock_data.items():
+            if 'Close' in data.columns:
+                returns_data[ticker] = data['Close'].pct_change().dropna()
+                print(f"✅ Calculando correlação para {ticker}")
+            else:
+                print(f"❌ Coluna 'Close' não encontrada para {ticker}")
+        
+        if len(returns_data) < 2:
+            print("⚠️ Dados insuficientes para mapa de correlação")
+            return
+        
+        correlation_df = pd.DataFrame(returns_data).corr()
+        
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.heatmap(correlation_df, annot=True, cmap='coolwarm', center=0, 
+                   square=True, linewidths=0.5)
+        ax.set_title('Correlação entre Ações', fontsize=14, fontweight='bold')
+        
+        # Corrigir layout
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/correlacao_acoes.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Mapa de correlação salvo: {filename}")
+    
+    def _plot_returns(self, stock_data: Dict, **kwargs):
+        """Plota retornos das ações"""
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        valid_data_count = 0
+        for ticker, data in stock_data.items():
+            if 'Close' in data.columns:
+                returns = data['Close'].pct_change().dropna()
+                ax.plot(returns.index, returns, label=ticker, alpha=0.7)
+                valid_data_count += 1
+                print(f"✅ Plotando retornos de {ticker}")
+            else:
+                print(f"❌ Coluna 'Close' não encontrada para {ticker}")
+        
+        if valid_data_count == 0:
+            print("⚠️ Nenhum dado válido encontrado para plotar retornos")
+            plt.close(fig)
+            return
+        
+        ax.set_title('Retornos Diários das Ações', fontsize=14, fontweight='bold')
+        ax.set_xlabel('Data')
+        ax.set_ylabel('Retorno (%)')
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        # Corrigir rotação e layout
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/retornos_acoes.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico de retornos salvo: {filename}")
+    
+    def _plot_scenario_comparison(self, comparacao: pd.DataFrame, **kwargs):
+        #Plota comparação dos cenários
+        if comparacao.empty:
+            return
+        
+        # Identificar colunas
+        juros_col = self._find_column(comparacao, ['Fixed_Interest_Capital', 'Juros_Fixos'])
+        carteira_col = self._find_column(comparacao, ['Stock_Portfolio_Capital', 'Carteira_Acoes'])
+        
+        if juros_col is None or carteira_col is None:
+            return
+        
+        fig, ax = plt.subplots(figsize=(14, 8))
+        
+        ax.plot(comparacao.index, comparacao[juros_col], 
+               label='Juros Fixos', linewidth=2, color='green', marker='o')
+        ax.plot(comparacao.index, comparacao[carteira_col], 
+               label='Carteira de Ações', linewidth=2, color='blue', marker='s')
+        
+        ax.set_title('Comparação: Juros Fixos vs Carteira de Ações', 
+                    fontsize=16, fontweight='bold')
+        ax.set_xlabel('Data')
+        ax.set_ylabel('Capital (R$)')
+        ax.legend(fontsize=12)
+        ax.grid(True, alpha=0.3)
+        
+        # Corrigir rotação e layout
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/comparacao_cenarios.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico comparativo salvo: {filename}")
+    
+    def _plot_capital_evolution(self, data: Dict, **kwargs):
+        #Plota evolução do capital
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
+        
+        # Gráfico 1: Juros Fixos
+        if 'juros_fixos' in data:
+            juros_data = data['juros_fixos']
+            capital_col = self._find_column(juros_data, ['Capital_Acumulado', 'Accumulated_Capital'])
+            if capital_col:
+                ax1.plot(juros_data.index, juros_data[capital_col], 
+                        color='green', linewidth=2, marker='o')
+                ax1.set_title('Evolução do Capital - Juros Fixos', fontweight='bold')
+                ax1.set_ylabel('Capital (R$)')
+                ax1.grid(True, alpha=0.3)
+        
+        # Gráfico 2: Carteira de Ações
+        if 'carteira_acoes' in data:
+            carteira_data = data['carteira_acoes']
+            capital_col = self._find_column(carteira_data, ['Capital_Acumulado', 'Accumulated_Capital'])
+            if capital_col:
+                ax2.plot(carteira_data.index, carteira_data[capital_col], 
+                        color='blue', linewidth=2, marker='s')
+                ax2.set_title('Evolução do Capital - Carteira de Ações', fontweight='bold')
+                ax2.set_xlabel('Data')
+                ax2.set_ylabel('Capital (R$)')
+                ax2.grid(True, alpha=0.3)
+        
+        # Corrigir rotação e layout
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/evolucao_capital.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico de evolução salvo: {filename}")
+    
+    def _plot_metrics_comparison(self, data: Dict, **kwargs):
+        #Plota comparação de métricas
+        juros_metrics = data.get('metricas_juros', {})
+        carteira_metrics = data.get('metricas_carteira', {})
+        
+        if not juros_metrics or not carteira_metrics:
+            return
+        
+        # Selecionar métricas para comparar
+        metrics_to_compare = ['CAGR', 'Annual_Volatility', 'Max_Drawdown', 'Sharpe_Ratio']
+        available_metrics = [m for m in metrics_to_compare 
+                           if m in juros_metrics and m in carteira_metrics]
+        
+        if not available_metrics:
+            return
+        
+        # Criar gráfico de barras
+        fig, ax = plt.subplots(figsize=(12, 6))
+        
+        x = np.arange(len(available_metrics))
+        width = 0.35
+        
+        juros_values = [juros_metrics[m] for m in available_metrics]
+        carteira_values = [carteira_metrics[m] for m in available_metrics]
+        
+        ax.bar(x - width/2, juros_values, width, label='Juros Fixos', color='green', alpha=0.7)
+        ax.bar(x + width/2, carteira_values, width, label='Carteira de Ações', color='blue', alpha=0.7)
+        
+        ax.set_title('Comparação de Métricas', fontsize=14, fontweight='bold')
+        ax.set_ylabel('Valor')
+        ax.set_xticks(x)
+        ax.set_xticklabels(available_metrics)
+        ax.legend()
+        ax.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/comparacao_metricas.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico de métricas salvo: {filename}")
+    
+    def _plot_simple_line(self, df: pd.DataFrame, title: str, **kwargs):
+        #Plota gráfico de linha simples"""
+        fig, ax = plt.subplots(figsize=(10, 6))
+        
+        # Encontrar coluna numérica
+        numeric_cols = df.select_dtypes(include=[np.number]).columns
+        if len(numeric_cols) == 0:
+            return
+        
+        # Plotar primeira coluna numérica
+        col = numeric_cols[0]
+        ax.plot(df.index, df[col], linewidth=2, marker='o')
+        ax.set_title(f'{title}', fontweight='bold')
+        ax.set_xlabel('Data')
+        ax.set_ylabel(col)
+        ax.grid(True, alpha=0.3)
+        
+        # Corrigir rotação e layout
+        plt.xticks(rotation=45, ha='right')
+        plt.tight_layout()
+        
+        # Salvar e exibir
+        filename = f"{self.output_dir}/{title.lower().replace(' ', '_')}.png"
+        fig.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.show()
+        plt.close(fig)
+        print(f"📊 Gráfico simples salvo: {filename}")
+    
+    def _find_column(self, df: pd.DataFrame, possible_names: List[str]) -> Optional[str]:
+        for name in possible_names:
+            if name in df.columns:
+                return name
+        return None
 
 class ReportFactory:
+    #Factory para criar geradores de relatórios
     @staticmethod
-    def create_default_report(output_dir: str = "outputs/plots") -> StockReport:
-        #Cria relatório com todas as análises
-        return StockReport(
-            output_dir=output_dir,
-            include_advanced_analysis=True,
-            include_summary_stats=True,
-            figsize=(14, 10)
-        )
-    
-    @staticmethod
-    def create_custom_report(output_dir: str = "outputs/plots",
-                           include_advanced_analysis: bool = True,
-                           include_summary_stats: bool = True,
-                           figsize: tuple = (12, 8)) -> StockReport:
-    #Cria relatório personalizado com configurações específicas"""
-        return StockReport(
-            output_dir=output_dir,
-            include_advanced_analysis=include_advanced_analysis,
-            include_summary_stats=include_summary_stats,
-            figsize=figsize
-        )
-    
-    @staticmethod
-    def get_available_configurations() -> Dict[str, str]:
-        #Retorna descrições das configurações disponíveis"""
-        return {
-            'default': 'Relatório padrão completo com todas as análises avançadas',
-            'custom': 'Relatório personalizado com configurações específicas'
-        }
+    def create_generator(report_type: str = 'simple', **kwargs) -> ReportGenerator:
+        if report_type.lower() == 'simple':
+            return ReportGenerator(**kwargs)
+        else:
+            raise ValueError(f"Tipo de relatório não suportado: {report_type}")

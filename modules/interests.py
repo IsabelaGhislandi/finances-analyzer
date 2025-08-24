@@ -197,16 +197,16 @@ class InvestmentSimulatorFactory:
         #Cria um simulador baseado no tipo especificado
         if simulator_type == 'compound_interest':
             return CompoundInterestSimulator(
-                initial_capital=kwargs.get('initial_capital'),
-                monthly_rate=kwargs.get('monthly_rate')
+                initial_capital=kwargs.get('initial_capital', 10000.0),
+                monthly_rate=kwargs.get('monthly_rate', 1.0)
             )
         
         elif simulator_type == 'stock_portfolio':
             return StockPortfolioSimulator (
-                tickers=kwargs.get('tickers'),
-                weights=kwargs.get('weights'),
-                initial_capital=kwargs.get('initial_capital'),
-                monthly_return_rate=kwargs.get('monthly_return_rate') 
+                tickers=kwargs.get('tickers', []),
+                weights=kwargs.get('weights', []),
+                initial_capital=kwargs.get('initial_capital', 10000.0),
+                monthly_return_rate=kwargs.get('monthly_return_rate', 0.01) 
         )
         
         else:
