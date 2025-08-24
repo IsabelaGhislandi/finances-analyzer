@@ -86,8 +86,8 @@ def create_system_config(args):
             'portfolio_type': 'standard',
             'report_type': 'simple',
             'simulator_type': 'compound',
-            'data_config': {'cache_enabled': True},  # ✅ Adicionar esta linha
-            'report_config': {'include_charts': True}  # ✅ E esta também
+            'data_config': {'cache_enabled': True},  
+            'report_config': {'include_charts': True}  
     }
     
     # Ajustar configuração baseada nos argumentos

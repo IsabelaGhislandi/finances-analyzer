@@ -1,5 +1,5 @@
 
-# 🚀 Investment Simulator
+# 🚀 Finances Analyzer
 
 **A comprehensive investment analysis and simulation tool built with Python**
 

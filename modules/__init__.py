@@ -19,7 +19,6 @@ class InvestmentAnalysisFactory:
         system = {
         'data_collector': self.data_factory.create_collector('yfinance'),
         'metrics_calculator': self.metrics_factory.create_calculator('performance'),
-        # ✅ CORREÇÃO: Usar nome único
         'portfolio_analyzer': self.portfolio_factory.create_portfolio_manager(tickers or [], weights or []),
         'report_generator': self.report_factory.create_generator('simple'),
         'investment_simulator': self.interests_factory
