@@ -123,29 +123,40 @@ class YFinanceDataCollector(DataCollectorInterface):
         return valid_tickers, invalid_tickers
         
 
-def parse_tickers(tickers_str: str) -> List[str]:
-        #Converte string de tickers separados por vírgula em lista   
+def parse_tickers(tickers_input) -> List[str]:
+        #Converte string de tickers separados por vírgula em lista ou lista já processada
         #Args:
-            # tickers_str: String como "PETR4.SA,VALE3.SA,ITUB4.SA"
+            # tickers_input: String como "PETR4.SA,VALE3.SA,ITUB4.SA" ou lista já processada
 
-        if not tickers_str:
+        if not tickers_input:
             return []
         
-        tickers = [ticker.strip().upper() for ticker in tickers_str.split(',')]
+        # Se já é uma lista, apenas normalizar
+        if isinstance(tickers_input, list):
+            tickers = [ticker.strip().upper() for ticker in tickers_input]
+        else:
+            # Se é string, fazer split
+            tickers = [ticker.strip().upper() for ticker in tickers_input.split(',')]
+        
         tickers = [ticker for ticker in tickers if ticker]  # Remove strings vazias
         
         return tickers
 
-def parse_weights(weights_str: str, num_assets: int) -> List[float]:
-        #Converte string de pesos em lista normalizada
+def parse_weights(weights_input, num_assets: int) -> List[float]:
+        #Converte string de pesos em lista normalizada ou lista já processada
         
-        if not weights_str:
+        if not weights_input:
             # Pesos iguais se não especificado
             weight = 1.0 / num_assets
             return [weight] * num_assets
         
         try:
-            weights = [float(w.strip()) for w in weights_str.split(',')]
+            # Se já é uma lista, usar diretamente
+            if isinstance(weights_input, list):
+                weights = [float(w) for w in weights_input]
+            else:
+                # Se é string, fazer split
+                weights = [float(w.strip()) for w in weights_input.split(',')]
             
             if len(weights) != num_assets:
                 logger.warning(f"Número de pesos ({len(weights)}) != número de ativos ({num_assets})")
@@ -165,7 +176,7 @@ def parse_weights(weights_str: str, num_assets: int) -> List[float]:
             return normalized_weights
             
         except ValueError as e:
-            logger.error(f"Erro ao processar pesos '{weights_str}': {e}")
+            logger.error(f"Erro ao processar pesos '{weights_input}': {e}")
             # Fallback para pesos iguais
             weight = 1.0 / num_assets
             return [weight] * num_assets

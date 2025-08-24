@@ -5,9 +5,8 @@ import pandas as pd
 import numpy as np
 import seaborn as sns
 import logging
-from typing import Dict, List, Optional
+from typing import Dict
 import os
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
