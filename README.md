@@ -1,9 +1,7 @@
 
-# C2P - Sistema de Análise de Investimentos
+# Financces Analyzer
 
 ## 📋 Visão Geral
-
-O **C2P** (Capital to Portfolio) é um sistema completo de análise de investimentos que integra **3 fases** de análise em uma única ferramenta, seguindo o padrão **Factory Pattern** para máxima flexibilidade e manutenibilidade:
 
 - **📊 FASE 1**: Análise exploratória dos dados históricos de ações
 - **💰 FASE 2**: Simulação de cenários de investimento com aportes mensais  
@@ -240,25 +238,6 @@ c2p/
 - `pytest-cov>=4.0.0`: Cobertura de testes
 - `black>=22.0.0`: Formatação de código
 - `flake8>=5.0.0`: Linting
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo LICENSE para detalhes.
-
-## 🆘 Suporte
-
-### **Problemas Comuns**
-1. **Erro de conexão**: Verificar internet e firewall
-2. **Dados não encontrados**: Verificar tickers e datas
-3. **Erro de memória**: Usar períodos menores ou modo rápido
-4. **Gráficos não aparecem**: Verificar dependências matplotlib
-
-### **Canais de Suporte**
-- Issues no GitHub
-- Documentação no README
-- Exemplos de uso acima
-
----
 
 **🎉 Sistema 100% Integrado com Factory Pattern!**
 
