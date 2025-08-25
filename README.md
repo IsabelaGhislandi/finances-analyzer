@@ -1,5 +1,5 @@
 
-# Financces Analyzer
+# Finances Analyzer
 
 ## 📋 Visão Geral
 
