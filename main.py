@@ -17,351 +17,346 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def create_argument_parser():
-    #Cria o parser de argumentos da linha de comando
-    parser = argparse.ArgumentParser(description='Investment Analysis Tool')
+def create_argument_parser() -> argparse.ArgumentParser:
+    """Cria o parser de argumentos da linha de comando."""
+    parser = argparse.ArgumentParser(description='Investment Analysis Tool - Sistema Integrado')
 
+    # Argumentos obrigatórios
     parser.add_argument('--tickers', nargs='+', required=True, help='Stock tickers to analyze')
-    parser.add_argument('--weights', nargs='+', type=float, help='Portfolio weights')
-    parser.add_argument('--start-date', required=True, help='Start date (YYYY-MM-DD)')
-    parser.add_argument('--end-date', required=True, help='End date (YYYY-MM-DD)')
-
-    parser.add_argument('--aporte-mensal', type=float, help='Monthly contribution amount')
-    parser.add_argument('--capital-inicial', type=float, help='Initial capital amount')
-    parser.add_argument('--taxa-juros', type=float, default=0.01, help='Monthly interest rate default 1 percent')
-    parser.add_argument('--retorno-fixo', type=float, default=0.01, help='Fixed monthly return rate default 1 percent')
+    parser.add_argument('--start', required=True, help='Start date (YYYY-MM-DD)')
+    parser.add_argument('--end', required=True, help='End date (YYYY-MM-DD)')
     
-    # Argumentos opcionais para Fase 1
-    parser.add_argument('--save-data', action='store_true', help='Save raw data to CSV files')
+    # Argumentos opcionais
+    parser.add_argument('--weights', nargs='+', type=float, help='Portfolio weights')
+    parser.add_argument('--aporte_mensal', type=float, help='Monthly contribution amount')
+    parser.add_argument('--capital_inicial', type=float, help='Initial capital amount')
+    parser.add_argument('--taxa_juros_mensal', type=float, default=0.01, help='Monthly interest rate (default: 1%)')
+    parser.add_argument('--forecast_horizon', type=int, default=30, help='Days to forecast (default: 30)')
+    
+    # Modos de execução
+    parser.add_argument('--mode', choices=['explore', 'simulate', 'forecast', 'integrated'], 
+                       default='integrated', help='Execution mode (default: integrated)')
+    
+    # Argumentos opcionais
+    parser.add_argument('--save-data', action='store_true', help='Save data to CSV files')
     parser.add_argument('--no-plots', action='store_true', help='Skip generating plots')
     parser.add_argument('--quick', action='store_true', help='Quick mode (no plot saving)')
-    parser.add_argument('--verbose', action='store_true', help='Verbose output with debug info')
+    parser.add_argument('--verbose', action='store_true', help='Verbose output')
     
     return parser
 
-def validate_arguments(args):
-    # Validar datas
+def validate_arguments(args: argparse.Namespace) -> argparse.Namespace:
+    """Valida os argumentos da linha de comando."""
     try:
-        datetime.strptime(args.start_date, '%Y-%m-%d')
+        datetime.strptime(args.start, '%Y-%m-%d')
+        datetime.strptime(args.end, '%Y-%m-%d')
     except ValueError:
-        raise ValueError(f"Data inicial inválida: {args.start_date}. Use formato YYYY-MM-DD")
+        raise ValueError("Datas devem estar no formato YYYY-MM-DD")
     
-    # Data final default é hoje
-    if args.end_date is None:
-        args.end_date = datetime.now().strftime('%Y-%m-%d')
-    else:
-        try:
-            datetime.strptime(args.end_date, '%Y-%m-%d')
-        except ValueError:
-            raise ValueError(f"Data final inválida: {args.end_date}. Use formato YYYY-MM-DD")
-    
-    # Validar período
-    start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
-    end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+    start_date = datetime.strptime(args.start, '%Y-%m-%d')
+    end_date = datetime.strptime(args.end, '%Y-%m-%d')
     
     if start_date >= end_date:
         raise ValueError("Data inicial deve ser anterior à data final")
     
-    # Validar valores monetários (só se estiver na Fase 2)
-    if hasattr(args, 'aporte_mensal') and args.aporte_mensal is not None:
-        if args.aporte_mensal < 0:
-            raise ValueError("Aporte mensal deve ser positivo")
+    # Validar pesos se fornecidos
+    if args.weights:
+        if len(args.weights) != len(args.tickers):
+            raise ValueError("Número de pesos deve ser igual ao número de tickers")
+        if abs(sum(args.weights) - 1.0) > 0.01:
+            raise ValueError("Pesos devem somar 1.0")
     
-    if hasattr(args, 'capital_inicial') and args.capital_inicial is not None:
-        if args.capital_inicial < 0:
-            raise ValueError("Capital inicial deve ser positivo")
-    
-    if hasattr(args, 'taxa_juros') and args.taxa_juros is not None:
-        if args.taxa_juros < 0:
-            raise ValueError("Taxa de juros deve ser positiva")
+    # Validar valores monetários se fornecidos
+    if args.aporte_mensal is not None and args.aporte_mensal < 0:
+        raise ValueError("Aporte mensal deve ser positivo")
+    if args.capital_inicial is not None and args.capital_inicial < 0:
+        raise ValueError("Capital inicial deve ser positivo")
     
     return args
 
-def create_system_config(args):
-    #Cria configuração do sistema baseada nos argumentos
-
+def create_system_config(args: argparse.Namespace) -> dict:
+    """Cria configuração do sistema."""
     config = {
-            'data_source': 'yfinance',
-            'metrics_type': 'performance',
-            'portfolio_type': 'standard',
-            'report_type': 'simple',
-            'simulator_type': 'compound',
-            'data_config': {'cache_enabled': True},  
-            'report_config': {'include_charts': True}  
+        'data_source': 'yfinance',
+        'metrics_type': 'performance',
+        'portfolio_type': 'standard',
+        'report_type': 'integrated',
+        'simulator_type': 'compound',
+        'data_config': {'cache_enabled': True},
+        'report_config': {'include_charts': not args.no_plots}
     }
     
-    # Ajustar configuração baseada nos argumentos
     if args.quick:
         config['report_config']['include_charts'] = False
     
-    if args.verbose:
-        config['data_config']['cache_enabled'] = False
-    
     return config
 
-def execute_analysis_phase_1(args, logger):
-    #Executa análise da Fase 1
+def execute_integrated_analysis(args, logger):
+    """Executa análise completa integrada."""
+    logger.info("=== EXECUÇÃO INTEGRADA - TODAS AS FASES ===")
+    
     print("\n" + "="*80)
-    print("📊 INVESTMENT SIMULATOR - FASE 1: ANÁLISE EXPLORATÓRIA")
+    print("🚀 INVESTMENT SIMULATOR - SISTEMA INTEGRADO")
     print("="*80)
     
-    # 1. Processar tickers
-    tickers = parse_tickers(args.tickers)
-    logger.info(f"Tickers solicitados: {tickers}")
-    print(f"🎯 Ativos para análise: {', '.join(tickers)}")
-    print(f"📅 Período: {args.start_date} até {args.end_date}")
+    # Criar sistema
+    system = InvestmentAnalysisFactory().create_complete_system(
+        create_system_config(args), 
+        args.tickers, 
+        args.weights or [1.0/len(args.tickers)] * len(args.tickers)
+    )
     
-    # 2. Processar pesos da carteira
-    weights = parse_weights(args.weights, len(tickers))
-    
-    # 3. Validar tickers
-    main_factory = InvestmentAnalysisFactory()
-    config = create_system_config(args)
-    system = main_factory.create_complete_system(config, tickers, weights)
-    
-    # Usar componentes do sistema
-    collector = system['data_collector']
-    report = system['report_generator']
-    
-    print(f"\n🔍 Validando ativos disponíveis...")
-    
-    valid_tickers, invalid_tickers = collector.validate_tickers(tickers)
-    
-    if invalid_tickers:
-        print(f"Ativos não encontrados: {', '.join(invalid_tickers)}")
-    
-    if not valid_tickers:
-        print("Nenhum ativo válido encontrado!")
-        return False
-    
-    print(f"✅ Ativos validados: {', '.join(valid_tickers)}")
-    
-    # 4. Coletar dados
-    print(f"\n📈 Coletando dados históricos...")
-    data_dict = collector.get_multiple_stocks(valid_tickers, args.start_date, args.end_date)
-    
-    if not data_dict:
-        print("Falha na coleta de dados!")
-        return False
-    
-    print(f"✅ Dados coletados para {len(data_dict)} ativo(s)")
-    
-    # 5. Resumo dos dados
-    print(f"\n📋 RESUMO DOS DADOS:")
+    # FASE 1: Análise Exploratória
+    print(f"\n📊 FASE 1: ANÁLISE EXPLORATÓRIA")
     print("-" * 60)
     
-    for ticker, data in data_dict.items():
-        price_start = data['Close'].iloc[0]
-        price_end = data['Close'].iloc[-1]
-        retorno = (price_end / price_start - 1) * 100
-        
-        print(f"{ticker:>12} | {len(data):>4} dias | "
-              f"R$ {price_start:>8.2f} → R$ {price_end:>8.2f} | "
-              f"{retorno:>6.1f}%")
+    stock_data = system['data_collector'].get_multiple_stocks(args.tickers, args.start, args.end)
+    if not stock_data:
+        print("❌ Falha na coleta de dados")
+        return False
     
-    # 6. Exibir composição da carteira
-    print(f"\n⚖️  COMPOSIÇÃO DA CARTEIRA:")
-    print("-" * 40)
-    for ticker, weight in zip(valid_tickers, weights):
-        print(f"{ticker:>12}: {weight:>6.1%}")
+    print(f"✅ Dados coletados para {len(stock_data)} ativo(s)")
     
-    # 7. Salvar dados se solicitado
-    if args.save_data:
-        print(f"\n💾 Salvando dados...")
-        os.makedirs('data/raw', exist_ok=True)
-        
-        for ticker, data in data_dict.items():
-            filename = f'data/raw/{ticker}_{args.start_date}_{args.end_date}.csv'
-            data.to_csv(filename)
-            logger.info(f"Dados salvos: {filename}")
-        
-        print(f"✅ Dados salvos em data/raw/")
+    # Resumo dos dados
+    print(f"\n📋 RESUMO DOS DADOS:")
+    print("-" * 60)
+    for ticker, data in stock_data.items():
+        if 'Close' in data.columns and len(data) > 0:
+            price_start = data['Close'].iloc[0]
+            price_end = data['Close'].iloc[-1]
+            retorno = (price_end / price_start - 1) * 100
+            print(f"{ticker:>12} | {len(data):>4} dias | "
+                  f"R$ {price_start:>8.2f} → R$ {price_end:>8.2f} | "
+                  f"{retorno:>6.1f}%")
     
-    # 8. Gerar relatórios visuais
-    if not args.no_plots:
-        print(f"\n📊 Gerando análises visuais...")
+    # FASE 2: Simulação de Investimentos (se parâmetros fornecidos)
+    if args.aporte_mensal and args.capital_inicial:
+        print(f"\n💰 FASE 2: SIMULAÇÃO DE INVESTIMENTOS")
+        print("-" * 60)
         
-        report = system['report_generator']
-        save_plots = not args.quick
+        simulator_factory = system['investment_simulator']
         
-        # Gerar relatório da Fase 1 usando o método correto
-        report.generate_report({
-            'stock_data': data_dict,
-            'tickers': valid_tickers,
-            'weights': weights
-        }, report_type='phase1')
+        # Simular juros fixos
+        juros_simulator = simulator_factory.create_simulator(
+            'compound_interest',
+            initial_capital=args.capital_inicial,
+            monthly_rate=args.taxa_juros_mensal * 100
+        )
+        df_juros = juros_simulator.simulate(
+            monthly_contribution=args.aporte_mensal,
+            start_date=args.start,
+            end_date=args.end
+        )
         
-        print("✅ Análises visuais geradas com sucesso!")
+        # Simular carteira de ações
+        carteira_simulator = simulator_factory.create_simulator(
+            'stock_portfolio',
+            tickers=args.tickers,
+            weights=args.weights or [1.0/len(args.tickers)] * len(args.tickers),
+            initial_capital=args.capital_inicial,
+            monthly_return_rate=0.01
+        )
+        df_carteira = carteira_simulator.simulate(
+            monthly_contribution=args.aporte_mensal,
+            start_date=args.start,
+            end_date=args.end,
+            stock_data=stock_data
+        )
+        
+        # Calcular métricas
+        metrics_calc = system['metrics_calculator']
+        metricas_juros = metrics_calc.calculate_metrics(df_juros)
+        metricas_carteira = metrics_calc.calculate_metrics(df_carteira)
+        
+        print(f"✅ Simulações concluídas:")
+        print(f"   Juros Fixos: R$ {metricas_juros.get('Final_Capital', 0):,.2f}")
+        print(f"   Carteira:    R$ {metricas_carteira.get('Final_Capital', 0):,.2f}")
+        
+        # Gerar tabela comparativa
+        print(f"\n📊 Gerando tabela comparativa...")
+        try:
+            from modules.report import generate_comparison_table, print_comparison_table
+            comparison_table = generate_comparison_table(df_juros, df_carteira, None)
+            if not comparison_table.empty:
+                print_comparison_table(comparison_table)
+                
+                # Salvar se solicitado
+                if args.save_data:
+                    os.makedirs('outputs', exist_ok=True)
+                    comparison_table.to_csv('outputs/comparison_table.csv', index=False)
+                    print("💾 Tabela comparativa salva: outputs/comparison_table.csv")
+            else:
+                print("⚠️ Não foi possível gerar tabela comparativa")
+        except Exception as e:
+            print(f"⚠️ Erro ao gerar tabela comparativa: {e}")
+    else:
+        print(f"\n⚠️ FASE 2: Parâmetros de simulação não fornecidos")
+        print("   Use --capital_inicial e --aporte_mensal para simular investimentos")
     
-    # 9. Informações para debug
-    if args.verbose:
-        print(f"\n🔧 DEBUG INFO:")
-        print(f"  - Cache ativo: {len(collector.cache)} entradas")
-        print(f"  - Memória de dados: {sum(data.memory_usage().sum() for data in data_dict.values()) / 1024 / 1024:.1f} MB")
+    # FASE 3: Previsões e Backtesting
+    if args.forecast_horizon:
+        print(f"\n🔮 FASE 3: PREVISÕES E BACKTESTING")
+        print("-" * 60)
+        
+        forecast_manager = system['forecast_manager']
+        backtest_manager = system['backtest_manager']
+        
+        print(f"🔮 PREVISÕES FUTURAS ({args.forecast_horizon} dias):")
+        print("-" * 50)
+        
+        all_forecasts = {}
+        all_backtests = {}
+        
+        for ticker, data in stock_data.items():
+            print(f"\n📈 {ticker}:")
+            
+            if 'Close' in data.columns and len(data) > 0:
+                price_series = data['Close']
+                
+                # Treinar modelo
+                if forecast_manager.train(price_series):
+                    forecast = forecast_manager.predict(args.forecast_horizon)
+                    all_forecasts[ticker] = forecast
+                    
+                    print(f"  ✅ Modelo treinado: {forecast_manager.get_model_info()}")
+                    print(f"  📊 Previsão final: R$ {forecast.iloc[-1]:.2f}")
+                    
+                    # Executar backtesting
+                    backtest_results = backtest_manager.run_backtest(price_series, forecast_manager)
+                    if backtest_results:
+                        all_backtests[ticker] = backtest_results
+                        metrics = backtest_results['metrics']
+                        print(f"  🔄 Backtesting: MAPE {metrics['avg_mape']:.1f}%, RMSE {metrics['avg_rmse']:.2f}")
+                    else:
+                        print(f"  ⚠️ Backtesting não pôde ser executado")
+                else:
+                    print(f"  ❌ Falha no treinamento do modelo")
+            else:
+                print(f"  ❌ Dados insuficientes para previsão")
+        
+        if all_forecasts:
+            print(f"\n✅ Previsões concluídas para {len(all_forecasts)} ativo(s)")
+        else:
+            print("❌ Nenhuma previsão foi gerada")
+    else:
+        print(f"\n⚠️ FASE 3: Horizonte de previsão não fornecido")
+        print("   Use --forecast_horizon para fazer previsões")
     
+    # RELATÓRIO FINAL INTEGRADO
+    print(f"\n🏆 RELATÓRIO FINAL INTEGRADO")
     print("="*80)
-    logger.info("Análise da Fase 1 concluída com sucesso")
     
-    return True
-
-def execute_analysis_phase2(args, logger):
-    #Executa Fase 2: Simulação de investimentos COMPLETA"""
-    logger.info("=== FASE 2: Simulação de investimentos COMPLETA ===")
-    # Criar sistema e executar tudo em uma linha
-    system = InvestmentAnalysisFactory().create_complete_system(create_system_config(args), args.tickers, args.weights)
-    # Executar simulações e gerar relatório
-    run_phase2(system, args)
-    logger.info("✅ Fase 2 concluída!")
-
-def run_phase2(system, args):
-    stock_data = system['data_collector'].get_multiple_stocks(args.tickers, args.start_date, args.end_date)
-    print(f"\n📊 Dados coletados: {'✅' if stock_data else '(usando simulação)'}")
-
-    # Criar simuladores específicos para cada cenário
-    simulator_factory = system['investment_simulator']
+    print(f"📊 RESUMO EXECUTIVO:")
+    print(f"   Ativos analisados: {', '.join(args.tickers)}")
+    print(f"   Período: {args.start} → {args.end}")
+    print(f"   Dados coletados: {len(stock_data)} ativo(s)")
     
-    # Simular juros fixos
-    juros_simulator = simulator_factory.create_simulator(
-        'compound_interest',
-        initial_capital=args.capital_inicial,
-        monthly_rate=args.taxa_juros * 100  # Converter para percentual
-    )
-    df_juros = juros_simulator.simulate(
-        monthly_contribution=args.aporte_mensal,
-        start_date=args.start_date,
-        end_date=args.end_date
-    )
+    if args.aporte_mensal and args.capital_inicial:
+        print(f"   Capital inicial: R$ {args.capital_inicial:,.2f}")
+        print(f"   Aporte mensal: R$ {args.aporte_mensal:,.2f}")
+        print(f"   Taxa de juros: {args.taxa_juros_mensal*100:.1f}% ao mês")
     
-    # Simular carteira de ações
-    carteira_simulator = simulator_factory.create_simulator(
-        'stock_portfolio',
-        tickers=args.tickers,
-        weights=args.weights,
-        initial_capital=args.capital_inicial,
-        monthly_return_rate=args.retorno_fixo
-    )
-    df_carteira = carteira_simulator.simulate(
-        monthly_contribution=args.aporte_mensal,
-        start_date=args.start_date,
-        end_date=args.end_date,
-        stock_data=stock_data
-    )
+    if args.forecast_horizon:
+        print(f"   Previsões: {args.forecast_horizon} dias")
+        print(f"   Modelos treinados: {len(all_forecasts) if 'all_forecasts' in locals() else 0}")
     
-    # Criar instância do InvestmentSimulator para comparar cenários
-    main_simulator = InvestmentSimulator(
-        initial_capital=args.capital_inicial,
-        monthly_contribution=args.aporte_mensal,
-        monthly_interest_rate=args.taxa_juros * 100
-    )
-    comparacao = main_simulator.compare_scenarios(df_juros, df_carteira)
-
-    metrics_calc = system['metrics_calculator']
-    metricas_juros = metrics_calc.calculate_metrics(df_juros)
-    metricas_carteira = metrics_calc.calculate_metrics(df_carteira)
-
-     # 4. Análise de portfólio
-    portfolio_mgr = system.get('portfolio_analyzer')
-    portfolio_analysis = portfolio_mgr.analyze_portfolio()
-    rebalanceamento = portfolio_mgr.suggest_rebalancing([1/len(args.tickers)] * len(args.tickers))
-
-    generate_report(args, comparacao, metricas_juros, metricas_carteira, portfolio_analysis, rebalanceamento, system, df_juros, df_carteira)
-
-def generate_report(args, comparacao, metricas_juros, metricas_carteira, portfolio_analysis, rebalanceamento, system, df_juros, df_carteira):
-    print("\n" + "="*80)
-    print("�� RELATÓRIO EXECUTIVO - FASE 2")
-    print("="*80)
-    
-    if system and not args.no_plots:
-        print(f"\n📊 Gerando gráficos...")
+    # Gerar gráficos integrados
+    if not args.no_plots and system.get('report_generator'):
+        print(f"\n📊 Gerando gráficos integrados...")
         try:
             report_gen = system['report_generator']
-            report_gen.generate_report({
-                'juros_fixos': df_juros,
-                'carteira_acoes': df_carteira,
-                'comparacao': comparacao,
-                'metricas_juros': metricas_juros,
-                'metricas_carteira': metricas_carteira,
-                'portfolio_analysis': portfolio_analysis,
-                'rebalanceamento': rebalanceamento
-            }, report_type='phase2')
-            print("✅ Gráficos gerados com sucesso!")
+            
+            # Dados para relatório integrado
+            report_data = {
+                'stock_data': stock_data,
+                'tickers': args.tickers,
+                'weights': args.weights or [1.0/len(args.tickers)] * len(args.tickers)
+            }
+            
+            if args.aporte_mensal and args.capital_inicial:
+                report_data.update({
+                    'juros_fixos': df_juros,
+                    'carteira_acoes': df_carteira,
+                    'metricas_juros': metricas_juros,
+                    'metricas_carteira': metricas_carteira
+                })
+            
+            if args.forecast_horizon and 'all_forecasts' in locals():
+                report_data.update({
+                    'forecasts': all_forecasts,
+                    'backtests': all_backtests
+                })
+            
+            # Gerar relatório integrado
+            report_gen.generate_report(report_data, report_type='integrated')
+            print("✅ Gráficos integrados gerados com sucesso!")
+            
         except Exception as e:
             print(f"⚠️ Gráficos não puderam ser gerados: {e}")
-    # Parâmetros em uma linha
-    print(f"💰 Capital: R$ {args.capital_inicial:,.2f} | Aporte: R$ {args.aporte_mensal:,.2f} | Período: {args.start_date} → {args.end_date}")
-    print(f"�� Ativos: {', '.join(args.tickers)} | Pesos: {', '.join([f'{w:.1%}' for w in args.weights])}")
-    
-    # Resultado final comparativo
-    if not comparacao.empty:
-        ultima = comparacao.iloc[-1]
-        juros_final = ultima['Fixed_Interest_Capital']
-        carteira_final = ultima['Stock_Portfolio_Capital']
-        diferenca = ultima['Capital_Difference']
-        
-        print(f"\n🏆 RESULTADO FINAL:")
-        print(f"  �� Juros Fixos: R$ {juros_final:>12,.0f}")
-        print(f"  �� Carteira:    R$ {carteira_final:>12,.0f}")
-        print(f"  �� Diferença:   R$ {diferenca:>12,.0f}")
-        
-        # Vantagem em uma linha
-        if diferenca > 0:
-            vantagem = (diferenca / juros_final) * 100
-            print(f"  🏆 Carteira venceu por {vantagem:.1f}%")
-        else:
-            vantagem = (abs(diferenca) / carteira_final) * 100
-            print(f"  �� Juros fixos venceram por {vantagem:.1f}%")
-    
-    # Métricas resumidas
-    print(f"\n�� MÉTRICAS RESUMIDAS:")
-    print(f"  �� Juros Fixos - CAGR: {metricas_juros.get('CAGR', 0):.1%} | Vol: {metricas_juros.get('Annual_Volatility', 0):.1%}")
-    print(f"  �� Carteira - CAGR: {metricas_carteira.get('CAGR', 0):.1%} | Vol: {metricas_carteira.get('Annual_Volatility', 0):.1%}")
-    
-    # Portfólio em uma linha
-    print(f"\n⚖️ PORTFÓLIO - Score: {portfolio_analysis['summary']['diversification_score']}/100 | Recomendação: {portfolio_analysis['summary']['recommendation']}")
-    
-    # Rebalanceamento compacto
-    if rebalanceamento:
-        print(f"�� Rebalanceamento: {', '.join([f'{t}:{info['Action'][:3]}' for t, info in rebalanceamento.items()])}")
     
     print("="*80)
+    logger.info("Execução integrada concluída com sucesso")
+    return True
 
 def execute_analysis(args, logger):
-    #Dispatcher: escolhe entre Fase 1 ou Fase 2 baseado nos argumentos"""
-    if args.aporte_mensal and args.capital_inicial:
-        # Tem argumentos de simulação = Fase 2
-        execute_analysis_phase2(args, logger)
+    #Dispatcher principal que escolhe o modo de execução.
+    
+    if args.mode == 'integrated':
+        return execute_integrated_analysis(args, logger)
+    elif args.mode == 'explore':
+        # Só Fase 1
+        args.aporte_mensal = None
+        args.capital_inicial = None
+        args.forecast_horizon = None
+        return execute_integrated_analysis(args, logger)
+    elif args.mode == 'simulate':
+        # Fases 1 e 2
+        args.forecast_horizon = None
+        return execute_integrated_analysis(args, logger)
+    elif args.mode == 'forecast':
+        # Fases 1 e 3
+        args.aporte_mensal = None
+        args.capital_inicial = None
+        return execute_integrated_analysis(args, logger)
     else:
-        # Só análise básica = Fase 1
-        execute_analysis_phase_1(args, logger)
+        print(f"❌ Modo inválido: {args.mode}")
+        return False
 
 def main():
-    #Função principal
-    # Parser de argumentos
+    #Função principal.
     parser = create_argument_parser()
+    
     try:
         args = parser.parse_args()
         args = validate_arguments(args)
     except ValueError as e:
-        print(f"Erro nos argumentos: {e}")
+        print(f"❌ Erro nos argumentos: {e}")
         parser.print_help()
         sys.exit(1)
     except SystemExit:
-        # argparse chamou sys.exit (--help, argumentos inválidos)
         sys.exit(1)
     
     logger.info("🚀 Investment Simulator iniciado")
+    logger.info(f"Modo: {args.mode}")
     logger.info(f"Argumentos: {vars(args)}")
     
     try:
-        execute_analysis(args, logger)  
+        success = execute_analysis(args, logger)
+        if success:
+            print("\n🎉 Análise concluída com sucesso!")
+        else:
+            print("\n❌ Análise falhou!")
+            sys.exit(1)
+            
     except KeyboardInterrupt:
-        print(f"\n\n Execução interrompida pelo usuário")
+        print(f"\n\n👋 Execução interrompida pelo usuário")
         logger.info("Execução interrompida pelo usuário")
         sys.exit(0)
         
     except Exception as e:
-        print(f"\n Erro inesperado: {e}")
+        print(f"\n❌ Erro inesperado: {e}")
         logger.exception("Erro inesperado durante a execução")
         sys.exit(1)
+
 if __name__ == "__main__":
     main()

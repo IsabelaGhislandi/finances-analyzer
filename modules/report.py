@@ -7,6 +7,7 @@ from typing import Dict, List, Optional
 from abc import ABC, abstractmethod
 import logging
 import os
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -17,7 +18,7 @@ class ReportGenerator(ABC):
 
         pass
 
-class ReportGenerator(ReportGenerator):
+class SimpleReportGenerator(ReportGenerator):
     #Gerador de relatórios simples e unificado
     
     def __init__(self, output_dir: str = 'outputs'):
@@ -46,7 +47,9 @@ class ReportGenerator(ReportGenerator):
         report_type = kwargs.get('report_type', 'auto')
         
         try:
-            if report_type == 'phase1' or 'stock_data' in data:
+            if report_type == 'integrated':
+                self._generate_integrated_report(data, **kwargs)
+            elif report_type == 'phase1' or 'stock_data' in data:
                 self._generate_phase1_report(data, **kwargs)
             elif report_type == 'phase2' or 'comparacao' in data:
                 self._generate_phase2_report(data, **kwargs)
@@ -359,11 +362,366 @@ class ReportGenerator(ReportGenerator):
                 return name
         return None
 
+    def generate_phase3_report(self, data: dict, report_type: str = 'phase3'):
+        """Gera relatório da Fase 3: Previsões e Backtesting"""
+        print(f"🔮 Gerando relatório da Fase 3...")
+        
+        if report_type == 'phase3':
+            self._generate_phase3_report(data)
+        else:
+            print(f"⚠️ Tipo de relatório não suportado: {report_type}")
+
+    def _generate_phase3_report(self, data: dict):
+        """Gera relatório completo da Fase 3"""
+        try:
+            # Extrair dados
+            forecasts = data.get('forecasts', {})
+            backtests = data.get('backtests', {})
+            stock_data = data.get('stock_data', {})
+            
+            if not forecasts:
+                print("⚠️ Nenhuma previsão encontrada para gerar gráficos")
+                return
+            
+            print(f"📊 Gerando {len(forecasts)} gráficos de previsões...")
+            
+            # 1. Gráfico de previsões para cada ativo
+            self._plot_forecasts(forecasts, stock_data)
+            
+            # 2. Gráfico de backtesting (se houver)
+            if backtests:
+                self._plot_backtest_results(backtests)
+            
+            # 3. Gráfico comparativo de métricas
+            if backtests:
+                self._plot_forecast_metrics(backtests)
+            
+            print("✅ Gráficos da Fase 3 gerados com sucesso!")
+            
+        except Exception as e:
+            print(f"❌ Erro ao gerar gráficos da Fase 3: {e}")
+
+    def _plot_forecasts(self, forecasts: dict, stock_data: dict):
+        # Plota previsões vs dados históricos
+        try:
+            fig, axes = plt.subplots(len(forecasts), 1, figsize=(12, 4*len(forecasts)))
+            if len(forecasts) == 1:
+                axes = [axes]
+            
+            for i, (ticker, forecast) in enumerate(forecasts.items()):
+                ax = axes[i]
+                
+                # Dados históricos
+                if ticker in stock_data and 'Close' in stock_data[ticker].columns:
+                    historical = stock_data[ticker]['Close']
+                    ax.plot(historical.index, historical.values, 
+                           label='Dados Históricos', color='blue', linewidth=2)
+                
+                # Previsões
+                ax.plot(forecast.index, forecast.values, 
+                       label='Previsões', color='red', linestyle='--', linewidth=2)
+                
+                # Configurações
+                ax.set_title(f'Previsões para {ticker} - Próximos {len(forecast)} dias')
+                ax.set_xlabel('Data')
+                ax.set_ylabel('Preço (R$)')
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                
+                # Rotacionar labels do eixo X
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45, ha='right')
+            
+            plt.tight_layout()
+            
+            # Salvar e mostrar
+            filename = f'outputs/phase3_forecasts_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            os.makedirs('outputs', exist_ok=True)
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            plt.show()
+            plt.close(fig)
+            
+            print(f"📈 Gráfico de previsões salvo: {filename}")
+            
+        except Exception as e:
+            print(f"❌ Erro ao plotar previsões: {e}")
+
+    def _plot_backtest_results(self, backtests: dict):
+        #Plota resultados do backtesting
+        try:
+            fig, axes = plt.subplots(len(backtests), 1, figsize=(12, 4*len(backtests)))
+            if len(backtests) == 1:
+                axes = [axes]
+            
+            for i, (ticker, results) in enumerate(backtests.items()):
+                ax = axes[i]
+                
+                # Valores reais vs previstos
+                actual = results.get('actual_values', [])
+                predicted = results.get('predicted_values', [])
+                
+                if actual and predicted:
+                    # Plotar apenas os primeiros 100 pontos para clareza
+                    max_points = min(100, len(actual), len(predicted))
+                    x = range(max_points)
+                    
+                    ax.plot(x, actual[:max_points], 
+                           label='Valores Reais', color='blue', linewidth=2)
+                    ax.plot(x, predicted[:max_points], 
+                           label='Valores Previstos', color='red', linestyle='--', linewidth=2)
+                    
+                    # Configurações
+                    ax.set_title(f'Backtesting para {ticker}')
+                    ax.set_xlabel('Período')
+                    ax.set_ylabel('Preço (R$)')
+                    ax.legend()
+                    ax.grid(True, alpha=0.3)
+            
+            plt.tight_layout()
+            
+            # Salvar e mostrar
+            filename = f'outputs/phase3_backtest_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            plt.show()
+            plt.close(fig)
+            
+            print(f"🔄 Gráfico de backtesting salvo: {filename}")
+            
+        except Exception as e:
+            print(f"❌ Erro ao plotar backtesting: {e}")
+
+    def _plot_forecast_metrics(self, backtests: dict):
+        # Plota métricas comparativas de previsão
+        try:
+            # Preparar dados
+            tickers = list(backtests.keys())
+            mape_values = [backtests[t]['metrics']['avg_mape'] for t in tickers]
+            rmse_values = [backtests[t]['metrics']['avg_rmse'] for t in tickers]
+            
+            # Criar gráfico de barras
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+            
+            # MAPE
+            bars1 = ax1.bar(tickers, mape_values, color='skyblue', alpha=0.7)
+            ax1.set_title('MAPE por Ativo (Menor = Melhor)')
+            ax1.set_ylabel('MAPE (%)')
+            ax1.grid(True, alpha=0.3)
+            
+            # Adicionar valores nas barras
+            for bar, value in zip(bars1, mape_values):
+                height = bar.get_height()
+                ax1.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{value:.1f}%', ha='center', va='bottom')
+            
+            # RMSE
+            bars2 = ax2.bar(tickers, rmse_values, color='lightcoral', alpha=0.7)
+            ax2.set_title('RMSE por Ativo (Menor = Melhor)')
+            ax2.set_ylabel('RMSE (R$)')
+            ax2.grid(True, alpha=0.3)
+            
+            # Adicionar valores nas barras
+            for bar, value in zip(bars2, rmse_values):
+                height = bar.get_height()
+                ax2.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{value:.2f}', ha='center', va='bottom')
+            
+            plt.tight_layout()
+            
+            # Salvar e mostrar
+            filename = f'outputs/phase3_metrics_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            plt.savefig(filename, dpi=300, bbox_inches='tight')
+            plt.show()
+            plt.close(fig)
+            
+            print(f"📊 Gráfico de métricas salvo: {filename}")
+            
+        except Exception as e:
+            print(f"❌ Erro ao plotar métricas: {e}")
+
+    def _generate_integrated_report(self, data: Dict, **kwargs):
+        """Gera relatório integrado com todas as fases"""
+        print(f"🔍 DEBUG: Gerando relatório integrado com dados: {list(data.keys())}")
+        
+        # Fase 1: Análise exploratória
+        if 'stock_data' in data:
+            print("📊 Gerando relatório Fase 1...")
+            self._generate_phase1_report(data, **kwargs)
+        
+        # Fase 2: Simulação de investimentos
+        if 'juros_fixos' in data and 'carteira_acoes' in data:
+            print("💰 Gerando relatório Fase 2...")
+            self._generate_phase2_report(data, **kwargs)
+        
+        # Fase 3: Previsões (se disponível)
+        if 'forecasts' in data:
+            print("🔮 Gerando relatório Fase 3...")
+            self._generate_phase3_report(data)
+        
+        # Relatório executivo integrado
+        self._generate_executive_summary(data, **kwargs)
+
+    def _generate_executive_summary(self, data: Dict, **kwargs):
+        """Gera resumo executivo integrado"""
+        print("\n" + "="*80)
+        print("📋 RELATÓRIO EXECUTIVO INTEGRADO")
+        print("="*80)
+        
+        if 'stock_data' in data:
+            print(f"📊 FASE 1: Análise de {len(data['stock_data'])} ativos")
+            print(f"   - Período: {data.get('start_date', 'N/A')} a {data.get('end_date', 'N/A')}")
+        
+        if 'juros_fixos' in data and 'carteira_acoes' in data:
+            print(f"💰 FASE 2: Simulação de investimentos")
+            print(f"   - Capital inicial: R$ {data.get('capital_inicial', 'N/A'):,.2f}")
+            print(f"   - Aporte mensal: R$ {data.get('aporte_mensal', 'N/A'):,.2f}")
+        
+        if 'forecasts' in data:
+            print(f"🔮 FASE 3: Previsões futuras")
+            print(f"   - Horizonte: {data.get('forecast_horizon', 'N/A')} dias")
+        
+        print("="*80)
+
 class ReportFactory:
     #Factory para criar geradores de relatórios
     @staticmethod
-    def create_generator(report_type: str = 'simple', **kwargs) -> ReportGenerator:
+    def create_generator(report_type: str = 'simple', **kwargs) -> 'SimpleReportGenerator':
         if report_type.lower() == 'simple':
-            return ReportGenerator(**kwargs)
+            return SimpleReportGenerator(**kwargs)
         else:
             raise ValueError(f"Tipo de relatório não suportado: {report_type}")
+
+def generate_comparison_table(df_juros, df_carteira, stock_data=None):
+    # Gera tabela comparativa profissional entre cenários
+    try:
+        # Debug: verificar estrutura dos DataFrames
+        print(f"🔍 DEBUG: df_juros colunas: {list(df_juros.columns)}")
+        print(f"🔍 DEBUG: df_carteira colunas: {list(df_carteira.columns)}")
+        print(f"🔍 DEBUG: df_juros shape: {df_juros.shape}")
+        print(f"🔍 DEBUG: df_carteira shape: {df_carteira.shape}")
+        
+        # Importar o calculador de métricas
+        from modules.metrics import create_default_metrics_calculator
+        metrics_calc = create_default_metrics_calculator()
+        
+        # Calcular métricas para Juros Compostos
+        juros_metrics = metrics_calc.calculate_metrics(df_juros)
+        print(f"🔍 DEBUG: juros_metrics: {juros_metrics}")
+        
+        # Calcular métricas para Carteira de Ações
+        carteira_metrics = metrics_calc.calculate_metrics(df_carteira)
+        print(f"🔍 DEBUG: carteira_metrics: {carteira_metrics}")
+        
+        # Debug: verificar se as métricas têm valores válidos
+        print(f"🔍 DEBUG: juros_metrics keys: {list(juros_metrics.keys())}")
+        print(f"🔍 DEBUG: carteira_metrics keys: {list(carteira_metrics.keys())}")
+        
+        # Criar tabela comparativa
+        comparison_data = {
+            'Métrica': [
+                'Valor Final (R$)',
+                'CAGR (%)',
+                'Volatilidade Anualizada (%)',
+                'Máximo Drawdown (%)',
+                'Sharpe Ratio',
+                'Retorno Total (%)'
+            ],
+            'Juros Compostos': [
+                f"R$ {juros_metrics.get('Final_Capital', 0):,.2f}",
+                f"{juros_metrics.get('CAGR', 0)*100:.2f}%",
+                f"{juros_metrics.get('Annual_Volatility', 0):.2f}%",
+                f"{juros_metrics.get('Max_Drawdown', 0):.2f}%",
+                f"{juros_metrics.get('Sharpe_Ratio', 0):.3f}",
+                f"{juros_metrics.get('Total_Return', 0):.2f}%"
+            ],
+            'Carteira de Ações': [
+                f"R$ {carteira_metrics.get('Final_Capital', 0):,.2f}",
+                f"{carteira_metrics.get('CAGR', 0)*100:.2f}%",
+                f"{carteira_metrics.get('Annual_Volatility', 0):.2f}%",
+                f"{carteira_metrics.get('Max_Drawdown', 0):.2f}%",
+                f"{carteira_metrics.get('Sharpe_Ratio', 0):.3f}",
+                f"{carteira_metrics.get('Total_Return', 0):.2f}%"
+            ]
+        }
+        
+        # Criar DataFrame da tabela
+        comparison_df = pd.DataFrame(comparison_data)
+        print(f"🔍 DEBUG: Tabela criada com {len(comparison_df)} linhas")
+        print(f"🔍 DEBUG: Colunas da tabela: {list(comparison_df.columns)}")
+        
+        # Calcular diferenças (extrair valores numéricos)
+        def extract_numeric(value_str):
+            # Extrai valor numérico de string formatada
+            try:
+                # Remove R$, % e converte para float
+                clean_value = value_str.replace('R$ ', '').replace('%', '').replace(',', '')
+                return float(clean_value)
+            except:
+                return 0.0
+        
+        # Calcular diferenças (extrair valores numéricos)
+        juros_values = [extract_numeric(val) for val in comparison_df['Juros Compostos']]
+        carteira_values = [extract_numeric(val) for val in comparison_df['Carteira de Ações']]
+        differences = [c - j for c, j in zip(carteira_values, juros_values)]
+        
+        # Formatar diferenças baseado no tipo de métrica
+        formatted_differences = []
+        for i, (metric, diff) in enumerate(zip(comparison_df['Métrica'], differences)):
+            if 'R$' in comparison_df['Juros Compostos'].iloc[i]:
+                # Para valores monetários
+                formatted_differences.append(f"+{diff:,.2f}" if diff > 0 else f"{diff:,.2f}")
+            elif '%' in comparison_df['Juros Compostos'].iloc[i]:
+                # Para percentuais
+                formatted_differences.append(f"+{diff:.2f}%" if diff > 0 else f"{diff:.2f}%")
+            else:
+                # Para outros valores
+                formatted_differences.append(f"+{diff:.3f}" if diff > 0 else f"{diff:.3f}")
+        
+        comparison_df['Diferença'] = formatted_differences
+        print(f"🔍 DEBUG: Tabela final com diferenças calculadas")
+        print(f"🔍 DEBUG: Primeiras linhas da tabela:")
+        print(comparison_df.head())
+        
+        return comparison_df
+        
+    except Exception as e:
+        logger.error(f"Erro ao gerar tabela comparativa: {e}")
+        return pd.DataFrame()
+
+def print_comparison_table(comparison_df):
+    #Imprime tabela comparativa formatada
+    if comparison_df.empty:
+        print("❌ Erro ao gerar tabela comparativa")
+        return
+    
+    print("\n" + "="*100)
+    print("📊 TABELA COMPARATIVA: JUROS COMPOSTOS vs CARTEIRA DE AÇÕES")
+    print("="*100)
+    
+    # Imprimir tabela formatada
+    for idx, row in comparison_df.iterrows():
+        print(f"{row['Métrica']:<30} | {row['Juros Compostos']:<20} | {row['Carteira de Ações']:<20} | {row['Diferença']:<15}")
+        if idx == 0:  # Separador após cabeçalho
+            print("-"*100)
+    
+    print("="*100)
+    
+    # Resumo executivo
+    print("\n🏆 RESUMO EXECUTIVO:")
+    
+    # Extrair valor final para comparação
+    try:
+        juros_final_str = comparison_df.iloc[0]['Juros Compostos']
+        carteira_final_str = comparison_df.iloc[0]['Carteira de Ações']
+        
+        juros_final = float(juros_final_str.replace('R$ ', '').replace(',', ''))
+        carteira_final = float(carteira_final_str.replace('R$ ', '').replace(',', ''))
+        
+        if carteira_final > juros_final:
+            diferenca = carteira_final - juros_final
+            print(f"✅ CARTEIRA SUPERIOR em R$ {diferenca:,.2f}")
+            print(f"📈 Vantagem: {(diferenca/juros_final)*100:.1f}% sobre juros fixos")
+        else:
+            diferenca = juros_final - carteira_final
+            print(f"⚠️ JUROS FIXOS SUPERIOR em R$ {diferenca:,.2f}")
+            print(f"📉 Desvantagem: {(diferenca/carteira_final)*100:.1f}% sobre carteira")
+    except Exception as e:
+        print(f"⚠️ Não foi possível calcular resumo executivo: {e}")

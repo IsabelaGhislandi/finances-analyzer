@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 logger = logging.getLogger(__name__)
 
 class PortfolioInterface(ABC):
-    #Interface para gerenciadores de portfólio"""
+    #Interface para gerenciadores de portfólio
     
     @abstractmethod
     def analyze_portfolio(self) -> Dict[str, any]:
@@ -111,7 +111,7 @@ class PortfolioManager(PortfolioInterface):
         }
     
     def _generate_recommendation(self, concentration: Dict, diversification: float) -> str:
-        #G recomendação baseada na análise"""
+        #G recomendação baseada na análise
         if concentration['Concentration_Level'] == "Muito Alta" or diversification < 30:
             return "Considerar diversificar mais o portfólio"
         elif concentration['Concentration_Level'] == "Alta" or diversification < 50:
@@ -146,7 +146,7 @@ class PortfolioManager(PortfolioInterface):
         return rebalancing
     
     def calculate_risk_metrics(self) -> Dict[str, float]:
-        #calcula métricas de risco do portfólio"""
+        #calcula métricas de risco do portfólio
         risk_metrics = {
             'concentration_risk': self._calculate_concentration_risk()['HHI'],
             'diversification_score': self._calculate_diversification_score(),
@@ -159,7 +159,7 @@ class PortfolioManager(PortfolioInterface):
 class PortfolioFactory:
     @staticmethod
     def create_portfolio_manager(tickers: List[str], weights: List[float]) -> PortfolioManager:
-        #Cria um gerenciador de portfólio"""
+        #Cria um gerenciador de portfólio
         return PortfolioManager(tickers, weights)
 
 # Funções de conveniência
